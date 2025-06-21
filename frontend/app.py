@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import os
 
 # Set page to wide layout
 st.set_page_config(
@@ -9,7 +10,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-API_URL = "http://localhost:8000"
+# Get API URL from environment variable or use default
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 # --- Light Theme CSS with Tabs ---
 st.markdown(
