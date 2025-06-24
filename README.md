@@ -109,14 +109,6 @@ This application is deployed on Render:
 - **Backend**: FastAPI web service
 - **Environment Variables**: Secure API key management
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
 ## 📄 License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
