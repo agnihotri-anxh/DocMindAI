@@ -30,31 +30,48 @@ class AIAssistant:
             "max_tokens": max_tokens,
             "temperature": temperature
         }
-        try:
-            print("Sending request to Groq API...")
-            response = requests.post(
-                GROQ_API_URL, 
-                headers=headers, 
-                json=data, 
-                timeout=60  # Increased timeout for longer summaries
-            )
-            print(f"Response status: {response.status_code}")
-            response.raise_for_status()
-            result = response.json()["choices"][0]["message"]["content"].strip()
-            print(f"API call successful, got response: {result[:100]}...")
-            return result
-        except requests.exceptions.Timeout:
-            print("ERROR: Request timed out")
-            return "Error: Request timed out"
-        except requests.exceptions.ConnectionError:
-            print("ERROR: Connection failed")
-            return "Error: Connection failed"
-        except requests.exceptions.RequestException as e:
-            print(f"ERROR: Request failed - {str(e)}")
-            return f"Error: {str(e)}"
-        except Exception as e:
-            print(f"ERROR: Unexpected error - {str(e)}")
-            return f"Error: {str(e)}"
+        
+        # Retry logic for better reliability
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"Sending request to Groq API (attempt {attempt + 1}/{max_retries})...")
+                response = requests.post(
+                    GROQ_API_URL, 
+                    headers=headers, 
+                    json=data, 
+                    timeout=(30, 120)  # (connect_timeout, read_timeout) - increased for longer responses
+                )
+                print(f"Response status: {response.status_code}")
+                response.raise_for_status()
+                result = response.json()["choices"][0]["message"]["content"].strip()
+                print(f"API call successful, got response: {result[:100]}...")
+                return result
+            except requests.exceptions.Timeout:
+                print(f"ERROR: Request timed out (attempt {attempt + 1}/{max_retries})")
+                if attempt == max_retries - 1:
+                    return "Error: Request timed out after multiple attempts"
+                time.sleep(2 ** attempt)  # Exponential backoff
+            except requests.exceptions.ConnectionError:
+                print(f"ERROR: Connection failed (attempt {attempt + 1}/{max_retries})")
+                if attempt == max_retries - 1:
+                    return "Error: Connection failed after multiple attempts"
+                time.sleep(2 ** attempt)  # Exponential backoff
+            except requests.exceptions.ChunkedEncodingError:
+                print(f"ERROR: Chunked encoding error (attempt {attempt + 1}/{max_retries})")
+                if attempt == max_retries - 1:
+                    return "Error: Response was interrupted after multiple attempts"
+                time.sleep(2 ** attempt)  # Exponential backoff
+            except requests.exceptions.RequestException as e:
+                print(f"ERROR: Request failed - {str(e)} (attempt {attempt + 1}/{max_retries})")
+                if attempt == max_retries - 1:
+                    return f"Error: {str(e)}"
+                time.sleep(2 ** attempt)  # Exponential backoff
+            except Exception as e:
+                print(f"ERROR: Unexpected error - {str(e)} (attempt {attempt + 1}/{max_retries})")
+                if attempt == max_retries - 1:
+                    return f"Error: {str(e)}"
+                time.sleep(2 ** attempt)  # Exponential backoff
 
     def generate_summary(self, text: str, max_words: int = 150) -> str:
         print(f"Generating summary for text of length: {len(text)} with max_words: {max_words}")

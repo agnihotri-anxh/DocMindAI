@@ -1,6 +1,9 @@
 import streamlit as st
 import requests
 import os
+import time
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # Set page to wide layout
 st.set_page_config(
@@ -12,6 +15,49 @@ st.set_page_config(
 
 # Get API URL from environment variable or use default
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
+
+# Configure requests session with retry logic
+def create_session():
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+# Create a session with retry logic
+session = create_session()
+
+# Function to make API requests with proper error handling
+def make_api_request(method, url, **kwargs):
+    """Make API request with timeout and error handling"""
+    try:
+        # Set default timeout if not provided
+        if 'timeout' not in kwargs:
+            kwargs['timeout'] = (30, 300)  # (connect_timeout, read_timeout)
+        
+        response = session.request(method, url, **kwargs)
+        response.raise_for_status()
+        return response
+    except requests.exceptions.ChunkedEncodingError as e:
+        st.error(f"Connection interrupted: {str(e)}")
+        return None
+    except requests.exceptions.Timeout as e:
+        st.error(f"Request timed out: {str(e)}")
+        return None
+    except requests.exceptions.ConnectionError as e:
+        st.error(f"Connection error: {str(e)}")
+        return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Request failed: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
+        return None
 
 # --- Light Theme CSS with Tabs ---
 st.markdown(
@@ -386,9 +432,9 @@ with tab1:
             with st.spinner("Processing your document..."):
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
                 url = f"{API_URL}/upload-document?max_words={summary_words}"
-                resp = requests.post(url, files=files)
+                resp = make_api_request("POST", url, files=files)
                 
-                if resp.status_code == 200:
+                if resp and resp.status_code == 200:
                     data = resp.json()
                     st.session_state["document_id"] = data["document_id"]
                     st.session_state["summary"] = data["summary"]
@@ -457,9 +503,9 @@ with tab2:
         if st.button("🔍 Get Answer", use_container_width=True):
             with st.spinner("Analyzing your question..."):
                 payload = {"question": question, "document_id": st.session_state["document_id"]}
-                resp = requests.post(f"{API_URL}/ask-question", json=payload)
+                resp = make_api_request("POST", f"{API_URL}/ask-question", json=payload)
                 
-                if resp.status_code == 200:
+                if resp and resp.status_code == 200:
                     data = resp.json()
                     st.markdown(
                         f"""
@@ -505,8 +551,8 @@ with tab3:
         
         if st.button("🎲 Generate Challenge Questions", use_container_width=True):
             with st.spinner("Creating learning challenges..."):
-                resp = requests.get(f"{API_URL}/generate-challenges/{st.session_state['document_id']}")
-                if resp.status_code == 200:
+                resp = make_api_request("GET", f"{API_URL}/generate-challenges/{st.session_state['document_id']}")
+                if resp and resp.status_code == 200:
                     st.session_state["challenge_questions"] = resp.json()["challenges"]
                     st.markdown(
                         """
@@ -547,9 +593,9 @@ with tab3:
                             "question": q, 
                             "document_id": st.session_state["document_id"]
                         }
-                        resp2 = requests.post(f"{API_URL}/evaluate-challenge", json=payload)
+                        resp2 = make_api_request("POST", f"{API_URL}/evaluate-challenge", json=payload)
                         
-                        if resp2.status_code == 200:
+                        if resp2 and resp2.status_code == 200:
                             st.markdown(
                                 f"""
                                 <div class="message info">
@@ -618,8 +664,8 @@ with tab4:
             )
             
             if st.button("🗑️ Delete Current Document", use_container_width=True):
-                resp = requests.delete(f"{API_URL}/documents/{st.session_state['document_id']}")
-                if resp.status_code == 200:
+                resp = make_api_request("DELETE", f"{API_URL}/documents/{st.session_state['document_id']}")
+                if resp and resp.status_code == 200:
                     st.markdown(
                         """
                         <div class="message success">

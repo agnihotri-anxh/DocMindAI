@@ -1,8 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Query
+from fastapi import FastAPI, UploadFile, File, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import uuid
 import sys
 import os
+import asyncio
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -27,58 +29,113 @@ documents = {}
 document_processor = DocumentProcessor()
 ai_assistant = AIAssistant()
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "documind-backend"}
+
 @app.post("/upload-document")
-def upload_document(
+async def upload_document(
     file: UploadFile = File(...),
     max_words: int = Query(default=150, description="Maximum number of words for summary")
 ):
-    print(f"Received upload request with max_words: {max_words}")
-    if not file.filename.lower().endswith((".pdf", ".txt")):
-        return {"error": "Only PDF and TXT files are supported"}
-    content = file.file.read()
-    if file.filename.lower().endswith(".pdf"):
-        text = document_processor.extract_pdf_text(content)
-    else:
-        text = document_processor.extract_txt_text(content)
-    doc_id = str(uuid.uuid4())
-    documents[doc_id] = {"text": text, "filename": file.filename}
-    print(f"Calling generate_summary with max_words: {max_words}")
-    summary = ai_assistant.generate_summary(text, max_words)
-    documents[doc_id]["summary"] = summary
-    return {"document_id": doc_id, "summary": summary, "filename": file.filename}
+    try:
+        print(f"Received upload request with max_words: {max_words}")
+        if not file.filename.lower().endswith((".pdf", ".txt")):
+            raise HTTPException(status_code=400, detail="Only PDF and TXT files are supported")
+        
+        content = await file.read()
+        if file.filename.lower().endswith(".pdf"):
+            text = document_processor.extract_pdf_text(content)
+        else:
+            text = document_processor.extract_txt_text(content)
+        
+        doc_id = str(uuid.uuid4())
+        documents[doc_id] = {"text": text, "filename": file.filename}
+        print(f"Calling generate_summary with max_words: {max_words}")
+        
+        # Run AI processing in a thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        summary = await loop.run_in_executor(None, ai_assistant.generate_summary, text, max_words)
+        
+        documents[doc_id]["summary"] = summary
+        return {"document_id": doc_id, "summary": summary, "filename": file.filename}
+    except Exception as e:
+        print(f"Error in upload_document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/ask-question")
-def ask_question(data: dict):
-    doc_id = data.get("document_id")
-    question = data.get("question")
-    if doc_id not in documents:
-        return {"error": "Document not found"}
-    answer = ai_assistant.answer_question(question, documents[doc_id]["text"])
-    return {"answer": answer}
+async def ask_question(data: dict):
+    try:
+        doc_id = data.get("document_id")
+        question = data.get("question")
+        if doc_id not in documents:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Run AI processing in a thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        answer = await loop.run_in_executor(
+            None, 
+            ai_assistant.answer_question, 
+            str(question), 
+            documents[doc_id]["text"]
+        )
+        return {"answer": answer}
+    except Exception as e:
+        print(f"Error in ask_question: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/generate-challenges/{document_id}")
-def generate_challenges(document_id: str):
-    if document_id not in documents:
-        return {"error": "Document not found"}
-    questions = ai_assistant.generate_challenges(documents[document_id]["text"])
-    return {"challenges": questions}
+async def generate_challenges(document_id: str):
+    try:
+        if document_id not in documents:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Run AI processing in a thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        questions = await loop.run_in_executor(
+            None, 
+            ai_assistant.generate_challenges, 
+            documents[document_id]["text"]
+        )
+        return {"challenges": questions}
+    except Exception as e:
+        print(f"Error in generate_challenges: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/evaluate-challenge")
-def evaluate_challenge(data: dict):
-    doc_id = data.get("document_id")
-    question = data.get("question")
-    answer = data.get("answer")
-    if doc_id not in documents:
-        return {"error": "Document not found"}
-    feedback = ai_assistant.evaluate_challenge_response(answer, question, documents[doc_id]["text"])
-    return {"feedback": feedback}
+async def evaluate_challenge(data: dict):
+    try:
+        doc_id = data.get("document_id")
+        question = data.get("question")
+        answer = data.get("answer")
+        if doc_id not in documents:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Run AI processing in a thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        feedback = await loop.run_in_executor(
+            None, 
+            ai_assistant.evaluate_challenge_response, 
+            str(answer), 
+            str(question), 
+            documents[doc_id]["text"]
+        )
+        return {"feedback": feedback}
+    except Exception as e:
+        print(f"Error in evaluate_challenge: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.delete("/documents/{document_id}")
-def delete_document(document_id: str):
-    if document_id in documents:
-        del documents[document_id]
-        return {"message": "Document deleted"}
-    return {"error": "Document not found"}
+async def delete_document(document_id: str):
+    try:
+        if document_id in documents:
+            del documents[document_id]
+            return {"message": "Document deleted"}
+        raise HTTPException(status_code=404, detail="Document not found")
+    except Exception as e:
+        print(f"Error in delete_document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
