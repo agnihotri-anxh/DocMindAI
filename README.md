@@ -51,10 +51,6 @@ Visit [https://docmindai.onrender.com](https://docmindai.onrender.com) and start
    streamlit run app.py
    ```
 
-5. **Access the Application**:
-   - Frontend: http://localhost:8501
-   - Backend API: http://localhost:8000
-
 ## 🏗️ Architecture
 
 - **Backend**: FastAPI with document processing and AI integration
