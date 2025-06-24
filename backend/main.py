@@ -41,25 +41,51 @@ async def upload_document(
 ):
     try:
         print(f"Received upload request with max_words: {max_words}")
+        
+        # Validate file type
         if not file.filename.lower().endswith((".pdf", ".txt")):
             raise HTTPException(status_code=400, detail="Only PDF and TXT files are supported")
         
+        # Validate file size (10MB limit)
         content = await file.read()
+        if len(content) > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+        
+        print(f"Processing file: {file.filename}, size: {len(content)} bytes")
+        
+        # Process file based on type
         if file.filename.lower().endswith(".pdf"):
             text = document_processor.extract_pdf_text(content)
         else:
             text = document_processor.extract_txt_text(content)
         
+        if not text or len(text.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Could not extract text from file. Please ensure the file contains readable text.")
+        
+        print(f"Extracted text length: {len(text)} characters")
+        
+        # Generate document ID and store
         doc_id = str(uuid.uuid4())
         documents[doc_id] = {"text": text, "filename": file.filename}
+        
         print(f"Calling generate_summary with max_words: {max_words}")
         
         # Run AI processing in a thread to avoid blocking
         loop = asyncio.get_event_loop()
         summary = await loop.run_in_executor(None, ai_assistant.generate_summary, text, max_words)
         
+        # Check if summary generation failed
+        if summary.startswith("Error:"):
+            raise HTTPException(status_code=500, detail=f"AI processing failed: {summary}")
+        
         documents[doc_id]["summary"] = summary
+        print(f"Successfully processed document {doc_id}")
+        
         return {"document_id": doc_id, "summary": summary, "filename": file.filename}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         print(f"Error in upload_document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

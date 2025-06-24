@@ -40,6 +40,10 @@ def make_api_request(method, url, **kwargs):
         if 'timeout' not in kwargs:
             kwargs['timeout'] = (30, 300)  # (connect_timeout, read_timeout)
         
+        # For file uploads, use longer timeouts
+        if 'files' in kwargs:
+            kwargs['timeout'] = (60, 600)  # Much longer timeouts for file uploads
+        
         response = session.request(method, url, **kwargs)
         response.raise_for_status()
         return response
@@ -58,6 +62,76 @@ def make_api_request(method, url, **kwargs):
     except Exception as e:
         st.error(f"Unexpected error: {str(e)}")
         return None
+
+def test_backend_connection():
+    """Test if backend is accessible"""
+    try:
+        response = session.get(f"{API_URL}/health", timeout=(10, 30))
+        if response.status_code == 200:
+            return True, "Backend is accessible"
+        else:
+            return False, f"Backend returned status {response.status_code}"
+    except Exception as e:
+        return False, f"Backend connection failed: {str(e)}"
+
+def upload_file_with_retry(file, max_words, max_retries=3):
+    """Upload file with retry logic and better error handling"""
+    for attempt in range(max_retries):
+        try:
+            # Check file size (limit to 10MB)
+            file_size = len(file.getvalue())
+            if file_size > 10 * 1024 * 1024:  # 10MB limit
+                st.error("File too large. Please upload a file smaller than 10MB.")
+                return None
+            
+            # Create progress bar
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            status_text.text("Preparing file for upload...")
+            progress_bar.progress(10)
+            
+            # Prepare file data
+            files = {"file": (file.name, file.getvalue())}
+            url = f"{API_URL}/upload-document?max_words={max_words}"
+            
+            status_text.text("Uploading file...")
+            progress_bar.progress(30)
+            
+            # Make the request
+            resp = make_api_request("POST", url, files=files)
+            
+            progress_bar.progress(80)
+            status_text.text("Processing document...")
+            
+            if resp and resp.status_code == 200:
+                progress_bar.progress(100)
+                status_text.text("Upload successful!")
+                time.sleep(1)  # Show success message briefly
+                progress_bar.empty()
+                status_text.empty()
+                return resp.json()
+            else:
+                progress_bar.empty()
+                status_text.empty()
+                if attempt < max_retries - 1:
+                    st.warning(f"Upload attempt {attempt + 1} failed. Retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    st.error("Upload failed after multiple attempts. Please try again.")
+                    return None
+                    
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+            if attempt < max_retries - 1:
+                st.warning(f"Upload attempt {attempt + 1} failed: {str(e)}. Retrying...")
+                time.sleep(2 ** attempt)
+            else:
+                st.error(f"Upload failed after multiple attempts: {str(e)}")
+                return None
+    
+    return None
 
 # --- Light Theme CSS with Tabs ---
 st.markdown(
@@ -429,16 +503,20 @@ with tab1:
     
     with col3:
         if uploaded_file and st.button("🚀 Upload & Generate Summary", use_container_width=True):
+            # First test backend connection
+            is_connected, message = test_backend_connection()
+            if not is_connected:
+                st.error(f"❌ Backend connection failed: {message}")
+                st.info("Please check if the backend service is running and accessible.")
+                st.stop()
+            
             with st.spinner("Processing your document..."):
-                files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
-                url = f"{API_URL}/upload-document?max_words={summary_words}"
-                resp = make_api_request("POST", url, files=files)
+                result = upload_file_with_retry(uploaded_file, summary_words)
                 
-                if resp and resp.status_code == 200:
-                    data = resp.json()
-                    st.session_state["document_id"] = data["document_id"]
-                    st.session_state["summary"] = data["summary"]
-                    st.session_state["filename"] = data["filename"]
+                if result:
+                    st.session_state["document_id"] = result["document_id"]
+                    st.session_state["summary"] = result["summary"]
+                    st.session_state["filename"] = result["filename"]
                     
                     st.markdown(
                         """
@@ -457,6 +535,15 @@ with tab1:
                         """,
                         unsafe_allow_html=True
                     )
+    
+    # Add connection test button
+    if st.button("🔧 Test Backend Connection", help="Test if the backend service is accessible"):
+        is_connected, message = test_backend_connection()
+        if is_connected:
+            st.success(f"✅ {message}")
+        else:
+            st.error(f"❌ {message}")
+            st.info("This may indicate the backend service is down or there's a network issue.")
     
     # Show summary if document is uploaded
     if "summary" in st.session_state:
