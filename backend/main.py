@@ -1,22 +1,25 @@
-from fastapi import FastAPI, UploadFile, File, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-import uuid
-import sys
-import os
-import asyncio
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
 load_dotenv()
+import os
+print("GROQ_API_KEY:", os.getenv("GROQ_API_KEY"))
 
-# Add the backend directory to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from document_processor import DocumentProcessor
-from ai_assistant import AIAssistant
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain.text_splitter import TokenTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.chains import RetrievalQA
+from langchain.chains.summarize import load_summarize_chain
+from langchain.prompts import PromptTemplate
+from langchain_groq import ChatGroq
+import shutil
+import tempfile
+from backend.ai_assistant import AIAssistant
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,143 +28,110 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-documents = {}
-document_processor = DocumentProcessor()
+vectorstore = None
+retriever = None
+all_docs = None
 ai_assistant = AIAssistant()
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "documind-backend"}
+# Helper: Load and split document
+def load_and_split(file_path, file_type):
+    if file_type == "pdf":
+        loader = PyPDFLoader(file_path)
+    else:
+        loader = TextLoader(file_path, encoding="utf-8")
+    documents = loader.load()
+    splitter = TokenTextSplitter(chunk_size=500, chunk_overlap=50)
+    docs = splitter.split_documents(documents)
+    return docs
 
 @app.post("/upload-document")
-async def upload_document(
-    file: UploadFile = File(...),
-    max_words: int = Query(default=150, description="Maximum number of words for summary")
-):
-    try:
-        print(f"Received upload request with max_words: {max_words}")
-        
-        # Validate file type
-        if not file.filename.lower().endswith((".pdf", ".txt")):
-            raise HTTPException(status_code=400, detail="Only PDF and TXT files are supported")
-        
-        # Validate file size (10MB limit)
-        content = await file.read()
-        if len(content) > 10 * 1024 * 1024:  # 10MB
-            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
-        
-        print(f"Processing file: {file.filename}, size: {len(content)} bytes")
-        
-        # Process file based on type
-        if file.filename.lower().endswith(".pdf"):
-            text = document_processor.extract_pdf_text(content)
-        else:
-            text = document_processor.extract_txt_text(content)
-        
-        if not text or len(text.strip()) == 0:
-            raise HTTPException(status_code=400, detail="Could not extract text from file. Please ensure the file contains readable text.")
-        
-        print(f"Extracted text length: {len(text)} characters")
-        
-        # Generate document ID and store
-        doc_id = str(uuid.uuid4())
-        documents[doc_id] = {"text": text, "filename": file.filename}
-        
-        print(f"Calling generate_summary with max_words: {max_words}")
-        
-        # Run AI processing in a thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        summary = await loop.run_in_executor(None, ai_assistant.generate_summary, text, max_words)
-        
-        # Check if summary generation failed
-        if summary.startswith("Error:"):
-            raise HTTPException(status_code=500, detail=f"AI processing failed: {summary}")
-        
-        documents[doc_id]["summary"] = summary
-        print(f"Successfully processed document {doc_id}")
-        
-        return {"document_id": doc_id, "summary": summary, "filename": file.filename}
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        print(f"Error in upload_document: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)):
+    global vectorstore, retriever, all_docs
+    ext = file.filename.split(".")[-1].lower()
+    if ext not in ["pdf", "txt"]:
+        return JSONResponse(status_code=400, content={"error": "Only PDF and TXT files are supported."})
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+    docs = load_and_split(tmp_path, ext)
+    all_docs = docs
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cuda"})
+    vectorstore = FAISS.from_documents(docs, embeddings)
+    retriever = vectorstore.as_retriever()
+    os.remove(tmp_path)
+    # Limit to first 10 chunks/pages for summary
+    summary_docs = docs[:10]
+    # Concatenate the text for summary
+    summary_text = "\n".join([doc.page_content for doc in summary_docs])
+    summary = ai_assistant.generate_summary(summary_text, max_words=summary_words)
+    return {"message": "Document uploaded and processed.", "summary": summary}
 
-@app.post("/ask-question")
-async def ask_question(data: dict):
-    try:
-        doc_id = data.get("document_id")
-        question = data.get("question")
-        if doc_id not in documents:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # Run AI processing in a thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        answer = await loop.run_in_executor(
-            None, 
-            ai_assistant.answer_question, 
-            str(question), 
-            documents[doc_id]["text"]
-        )
+@app.post("/ask")
+def ask_question(query: str = Form(...)):
+    global retriever, all_docs
+    if retriever is None:
+        return JSONResponse(status_code=400, content={"error": "No document uploaded yet."})
+    llm = ChatGroq(api_key=os.getenv("GROQ_API_KEY"), model="llama3-70b-8192")    # Custom prompt to require justification and reference
+    prompt = PromptTemplate(
+        input_variables=["context", "question"],
+        template=(
+            "You are a careful assistant. Answer the question using ONLY the provided document context. "
+            "Always justify your answer with a reference to the section or paragraph.\n"
+            "\nContext:\n{context}\n\nQuestion: {question}\n\n"
+            "Answer (with justification and reference):"
+        ),
+    )
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        retriever=retriever,
+        chain_type="stuff",
+        chain_type_kwargs={"prompt": prompt},
+        return_source_documents=True,
+    )
+    result = qa_chain({"query": query})
+    answer = result["result"]
+    # Optionally, extract reference from source docs
+    sources = result.get("source_documents", [])
+    if sources:
+        ref = sources[0].metadata.get("source", "")
+        answer += f"\n\n[Reference: {ref}]"
         return {"answer": answer}
-    except Exception as e:
-        print(f"Error in ask_question: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@app.get("/generate-challenges/{document_id}")
-async def generate_challenges(document_id: str):
-    try:
-        if document_id not in documents:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # Run AI processing in a thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        questions = await loop.run_in_executor(
-            None, 
-            ai_assistant.generate_challenges, 
-            documents[document_id]["text"]
-        )
-        return {"challenges": questions}
-    except Exception as e:
-        print(f"Error in generate_challenges: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+@app.post("/challenge")
+def challenge():
+    global all_docs
+    if not all_docs:
+        return JSONResponse(status_code=400, content={"error": "No document uploaded yet."})
+    # Use the first 5 chunks for better context
+    context = "\n".join([doc.page_content for doc in all_docs[:5]]) if all_docs else ""
+    questions = ai_assistant.generate_challenges(context)
+    # Clean up and return only non-empty, question-like lines
+    questions_list = [q.strip("- ").strip() for q in questions if q.strip() and "?" in q]
+    return {"questions": questions_list[:3]}
 
-@app.post("/evaluate-challenge")
-async def evaluate_challenge(data: dict):
-    try:
-        doc_id = data.get("document_id")
-        question = data.get("question")
-        answer = data.get("answer")
-        if doc_id not in documents:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # Run AI processing in a thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        feedback = await loop.run_in_executor(
-            None, 
-            ai_assistant.evaluate_challenge_response, 
-            str(answer), 
-            str(question), 
-            documents[doc_id]["text"]
-        )
-        return {"feedback": feedback}
-    except Exception as e:
-        print(f"Error in evaluate_challenge: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+@app.post("/evaluate")
+def evaluate(answer: str = Form(...), question: str = Form(...)):
+    global all_docs
+    if not all_docs:
+        return JSONResponse(status_code=400, content={"error": "No document uploaded yet."})
+    llm = ChatGroq(api_key=os.getenv("GROQ_API_KEY"), model="llama3-70b-8192")
+    # Prompt to evaluate answer and provide feedback with justification
+    prompt = PromptTemplate(
+        input_variables=["context", "question", "answer"],
+        template=(
+            "You are an expert evaluator. Given the document context, the question, and the user's answer, "
+            "evaluate the answer for correctness and provide feedback. Always justify your feedback with a reference to the document.\n"
+            "\nContext:\n{context}\n\nQuestion: {question}\nUser Answer: {answer}\n\nFeedback (with justification and reference):"
+        ),
+    )
+    chain = load_summarize_chain(llm, chain_type="stuff", prompt=prompt)
+    context = all_docs[0].page_content if all_docs else ""
+    feedback = chain.run([{"page_content": context}], question=question, answer=answer)
+    return {"feedback": feedback}
 
-@app.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    try:
-        if document_id in documents:
-            del documents[document_id]
-            return {"message": "Document deleted"}
-        raise HTTPException(status_code=404, detail="Document not found")
-    except Exception as e:
-        print(f"Error in delete_document: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
