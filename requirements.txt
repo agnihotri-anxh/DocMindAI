@@ -17,3 +17,4 @@ tiktoken
 torch
 torchvision
 timm
+faiss-cpu==1.7.4
