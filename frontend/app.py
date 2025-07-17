@@ -33,7 +33,7 @@ def index():
                 SESSION["challenge_questions"] = []
                 SESSION["challenge_feedback"] = []
                 flash(f"✅ {PROJECT_NAME}: Document processed successfully!", "success")
-        else:
+            else:
                 flash(resp.json().get("error", "❌ Failed to upload document."), "danger")
         elif "question" in request.form:
             question = request.form["question"]
@@ -47,7 +47,7 @@ def index():
             if resp.status_code == 200:
                 SESSION["challenge_questions"] = resp.json().get("questions", [])
                 SESSION["challenge_feedback"] = [None] * len(SESSION["challenge_questions"])
-                else:
+            else:
                 flash(resp.json().get("error", "❌ Failed to generate challenges."), "danger")
         elif "submit_answer" in request.form:
             idx = int(request.form["submit_answer"])  # which question
