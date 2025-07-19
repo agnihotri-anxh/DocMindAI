@@ -112,7 +112,3 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - FastAPI for the backend API
 - Render for deployment platform
 
----
-
-**Transform your research workflow with intelligent document analysis!** 🧠✨ 
->>>>>>> 309914eac995bd8822f3f2e85ee671d72f52bfae
