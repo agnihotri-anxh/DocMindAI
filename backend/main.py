@@ -46,6 +46,7 @@ def load_and_split(file_path, file_type):
 
 @app.post("/upload-document")
 def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)):
+    print("Received upload-document request")
     global vectorstore, retriever, all_docs
     ext = file.filename.split(".")[-1].lower()
     if ext not in ["pdf", "txt"]:
@@ -55,7 +56,7 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
         tmp_path = tmp.name
     docs = load_and_split(tmp_path, ext)
     all_docs = docs
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cuda"})
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cpu"})
     vectorstore = FAISS.from_documents(docs, embeddings)
     retriever = vectorstore.as_retriever()
     os.remove(tmp_path)
@@ -68,6 +69,7 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
 
 @app.post("/ask")
 def ask_question(query: str = Form(...)):
+    print("Received ask_question request")
     global retriever, all_docs
     if retriever is None:
         return JSONResponse(status_code=400, content={"error": "No document uploaded yet."})
