@@ -17,8 +17,6 @@ from langchain_groq import ChatGroq
 import shutil
 import tempfile
 from backend.ai_assistant import AIAssistant
-import psutil, os
-print(f"Initial memory usage: {psutil.Process(os.getpid()).memory_info().rss / 1024 ** 2:.2f} MB")
 
 app = FastAPI()
 
@@ -60,9 +58,9 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
         tmp_path = tmp.name
     docs = load_and_split(tmp_path, ext)
     all_docs = docs[:10]  # Only keep first 10 chunks/pages
-    # embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cpu"})
-    # vectorstore = FAISS.from_documents(all_docs, embeddings)
-    # retriever = vectorstore.as_retriever()
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cpu"})
+    vectorstore = FAISS.from_documents(all_docs, embeddings)
+    retriever = vectorstore.as_retriever()
     os.remove(tmp_path)
     # Limit to first 10 chunks/pages for summary
     summary_docs = all_docs
@@ -73,7 +71,7 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
     import gc
     del docs, summary_docs, summary_text, contents
     gc.collect()
-    return {"message": "Document uploaded and processed.", "summary": "Test summary."}
+    return {"message": "Document uploaded and processed.", "summary": summary}
 
 @app.post("/ask")
 def ask_question(query: str = Form(...)):
