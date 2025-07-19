@@ -17,5 +17,4 @@ tiktoken
 torch
 torchvision
 timm
-Flask
 Jinja2
