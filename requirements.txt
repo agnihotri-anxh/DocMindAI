@@ -18,3 +18,4 @@ torch
 torchvision
 timm
 Jinja2
+gunicorn
