@@ -1,9 +1,5 @@
 # DocuMind AI: LangChain-Powered Document QA
 
-## Prerequisites
-- Python 3.9+
-- pip
-
 ## 1. Install dependencies
 
 ```bash
