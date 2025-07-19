@@ -47,24 +47,30 @@ def load_and_split(file_path, file_type):
 @app.post("/upload-document")
 def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)):
     print("Received upload-document request")
-    global vectorstore, retriever, all_docs
+    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+    contents = file.file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        return JSONResponse(status_code=400, content={"error": "File too large. Max 2MB allowed."})
+    # Save contents to a temp file
     ext = file.filename.split(".")[-1].lower()
-    if ext not in ["pdf", "txt"]:
-        return JSONResponse(status_code=400, content={"error": "Only PDF and TXT files are supported."})
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-        shutil.copyfileobj(file.file, tmp)
+        tmp.write(contents)
         tmp_path = tmp.name
     docs = load_and_split(tmp_path, ext)
-    all_docs = docs
+    all_docs = docs[:10]  # Only keep first 10 chunks/pages
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": "cpu"})
-    vectorstore = FAISS.from_documents(docs, embeddings)
+    vectorstore = FAISS.from_documents(all_docs, embeddings)
     retriever = vectorstore.as_retriever()
     os.remove(tmp_path)
     # Limit to first 10 chunks/pages for summary
-    summary_docs = docs[:10]
+    summary_docs = all_docs
     # Concatenate the text for summary
     summary_text = "\n".join([doc.page_content for doc in summary_docs])
     summary = ai_assistant.generate_summary(summary_text, max_words=summary_words)
+    # Release memory after processing
+    import gc
+    del docs, summary_docs, summary_text, contents
+    gc.collect()
     return {"message": "Document uploaded and processed.", "summary": summary}
 
 @app.post("/ask")
