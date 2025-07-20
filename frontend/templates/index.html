@@ -4,38 +4,138 @@
   <title>DocuMind AI Assistant</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background: #f4f6fa; color: #22223b; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .navbar { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .navbar-brand { font-weight: 700; color: #3b82f6 !important; font-size: 1.5rem; letter-spacing: 1px; }
-    .nav-link { color: #22223b !important; font-weight: 500; }
-    .hero-section { background: linear-gradient(120deg, #e0e7ff 0%, #f4f6fa 100%); padding: 3rem 0 2rem 0; text-align: center; border-radius: 0 0 32px 32px; margin-bottom: 2rem; }
-    .hero-title { font-size: 2.5rem; font-weight: 800; color: #3b82f6; margin-bottom: 0.5rem; }
-    .hero-subtitle { color: #4b5563; font-size: 1.2rem; margin-bottom: 1.5rem; }
-    .main-content { display: flex; gap: 2rem; }
-    .main-card { border-radius: 18px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); border: 1px solid #e2e8f0; background: #fff; flex: 2; margin-bottom: 2rem; }
-    .sidebar { flex: 1; background: #f8fafc; border-radius: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); padding: 2rem 1.5rem; margin-bottom: 2rem; border: 1px solid #e2e8f0; }
-    .section-title { font-size: 1.2rem; font-weight: 600; color: #22223b; margin-bottom: 1rem; border-left: 4px solid #3b82f6; padding-left: 0.75rem; }
-    .btn-primary { background: #3b82f6; border: none; font-weight: 600; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-outline-primary, .btn-outline-success { font-weight: 600; }
-    .form-label { font-weight: 600; color: #22223b; }
-    .summary-card { background: #f8fafc; border-left: 5px solid #3b82f6; }
-    .answer-card { background: #f1f5f9; border-left: 5px solid #10b981; }
-    .challenge-card { background: #f8fafc; border-left: 5px solid #f59e42; }
-    .footer { margin-top: 3rem; color: #6c757d; font-size: 0.95rem; text-align: center; background: #fff; border-top: 1px solid #e2e8f0; padding: 2rem 0 1rem 0; border-radius: 32px 32px 0 0; }
-    .mode-btn { margin-right: 10px; }
-    .divider { border-bottom: 1px solid #e2e8f0; margin: 2rem 0 1.5rem 0; }
-    @media (max-width: 991px) {
-      .main-content { flex-direction: column; }
-      .sidebar { margin-bottom: 2rem; }
+    :root {
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --success: #10b981;
+      --warning: #f59e42;
+      --bg-light: #f8fafc;
+      --bg-main: #f4f6fa;
+      --text: #22223b;
+      --text-muted: #6c757d;
+      --border: #e2e8f0;
+    }
+    
+    body { 
+      background: var(--bg-main); 
+      color: var(--text); 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    
+    .navbar { 
+      background: #fff; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    .navbar-brand { 
+      font-weight: 700; 
+      color: var(--primary) !important; 
+      font-size: 1.5rem; 
+    }
+    
+    .hero { 
+      background: linear-gradient(120deg, #e0e7ff 0%, var(--bg-main) 100%); 
+      padding: 3rem 0; 
+      text-align: center; 
+      margin-bottom: 2rem;
+    }
+    
+    .hero h1 { 
+      font-size: 2.5rem; 
+      font-weight: 800; 
+      color: var(--primary); 
+      margin-bottom: 0.5rem; 
+    }
+    
+    .hero p { 
+      color: var(--text-muted); 
+      font-size: 1.1rem; 
+    }
+    
+    .card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    
+    .card-primary { border-left: 4px solid var(--primary); }
+    .card-success { border-left: 4px solid var(--success); }
+    .card-warning { border-left: 4px solid var(--warning); }
+    
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    
+    .btn-primary { 
+      background: var(--primary); 
+      border: none; 
+      font-weight: 600; 
+      border-radius: 8px;
+    }
+    
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn:not(.btn-sm) { padding: 0.75rem 1.5rem; }
+    
+    .form-control, .form-select { 
+      border-radius: 8px; 
+      border: 1px solid var(--border);
+    }
+    
+    .sidebar {
+      background: var(--bg-light);
+      border-radius: 12px;
+      padding: 1.5rem;
+      height: fit-content;
+      position: sticky;
+      top: 80px;
+    }
+    
+    .sidebar ul { 
+      padding-left: 1.2rem; 
+      margin-bottom: 0;
+    }
+    
+    .sidebar li { margin-bottom: 0.5rem; }
+    
+    .mode-tabs .btn {
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .answer-section {
+      background: #f0fdf4;
+      border-left: 4px solid var(--success);
+    }
+    
+    .challenge-item {
+      background: #fefce8;
+      border-left: 4px solid var(--warning);
+      margin-bottom: 1rem;
+    }
+    
+    .contact-info p { margin-bottom: 0.5rem; }
+    
+    footer {
+      background: #fff;
+      border-top: 1px solid var(--border);
+      padding: 2rem 0;
+      margin-top: 3rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-0">
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-light sticky-top">
     <div class="container">
-      <a class="navbar-brand" href="/">DocMind Ai</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <a class="navbar-brand" href="/">DocMind AI</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
@@ -46,122 +146,180 @@
       </div>
     </div>
   </nav>
-  <div class="hero-section">
-    <div class="hero-title">DocMind Ai Assistant</div>
-    <div class="hero-subtitle">AI-powered document comprehension and logic challenge platform for research, legal, and technical files</div>
-  </div>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <h1>DocMind AI Assistant</h1>
+      <p class="lead">AI-powered document comprehension and logic challenge platform</p>
+    </div>
+  </section>
+
   <div class="container">
-    <div class="main-content">
-      <div class="sidebar d-none d-lg-block">
-        <div class="section-title">How it works</div>
-        <ul class="mb-3">
-          <li>Upload a PDF or TXT document (max 10 pages summarized)</li>
-          <li>Select summary length (words)</li>
-          <li>Get a concise summary instantly</li>
-          <li>Ask any question about the document</li>
-          <li>Try the "Challenge Me" mode for logic-based Q&A</li>
-        </ul>
-        <div class="section-title">Features</div>
-        <ul>
-          <li>Contextual, referenced answers</li>
-          <li>Logic-based challenge questions</li>
-          <li>Professional, modern UI</li>
-        </ul>
-      </div>
-      <div style="flex:2; min-width:0;">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            {% for category, message in messages %}
-              <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ message }}</div>
-            {% endfor %}
-          {% endif %}
-        {% endwith %}
-        <div class="main-card p-4 mb-4">
-          <div class="section-title"> Upload Document</div>
-          <form method="post" enctype="multipart/form-data">
-            <label class="form-label">Select PDF or TXT file</label>
-            <input class="form-control mb-3" type="file" name="file" accept=".pdf,.txt" required>
-            <label class="form-label">Summary Length (words)</label>
-            <select class="form-select mb-3" name="summary_words">
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="150" selected>150</option>
-              <option value="200">200</option>
-              <option value="300">300</option>
-              <option value="500">500</option>
-            </select>
-            <button class="btn btn-primary w-100" type="submit">Upload & Generate Summary</button>
-          </form>
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="row">
+      <!-- Main Content -->
+      <div class="col-lg-9">
+        <!-- Upload Section -->
+        <div class="card card-primary">
+          <div class="card-body">
+            <h5 class="card-title">Upload Document</h5>
+            <form method="post" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Select PDF or TXT file</label>
+                <input class="form-control" type="file" name="file" accept=".pdf,.txt" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Summary Length</label>
+                <select class="form-select" name="summary_words">
+                  <option value="50">50 words</option>
+                  <option value="100">100 words</option>
+                  <option value="150" selected>150 words</option>
+                  <option value="200">200 words</option>
+                  <option value="300">300 words</option>
+                  <option value="500">500 words</option>
+                </select>
+              </div>
+              <button class="btn btn-primary w-100" type="submit">Upload & Generate Summary</button>
+            </form>
+          </div>
         </div>
+
+        <!-- Summary -->
         {% if summary %}
-          <div class="main-card p-4 mb-4 summary-card">
-            <div class="section-title">2. Document Summary</div>
-            <div>{{ summary }}</div>
+          <div class="card card-primary">
+            <div class="card-body">
+              <h5 class="card-title">Document Summary</h5>
+              <p>{{ summary }}</p>
+            </div>
           </div>
         {% endif %}
+
+        <!-- Interaction Modes -->
         {% if doc_uploaded %}
-          <div class="main-card p-4 mb-4">
-            <div class="section-title">3. Interaction Modes</div>
-            <div class="mb-3">
-              <a href="/" class="btn btn-outline-primary mode-btn {% if not challenge_mode %}active{% endif %}">Ask Anything</a>
-              <a href="/challenge" class="btn btn-outline-success mode-btn {% if challenge_mode %}active{% endif %}">Challenge Me</a>
-            </div>
-            <div class="divider"></div>
-            {% if not challenge_mode %}
-              <div class="mb-3">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Interaction Modes</h5>
+              
+              <div class="mode-tabs mb-3">
+                <a href="/" class="btn btn-{{ 'primary' if not challenge_mode else 'outline-primary' }}">Ask Anything</a>
+                <a href="/challenge" class="btn btn-{{ 'success' if challenge_mode else 'outline-success' }}">Challenge Me</a>
+              </div>
+
+              {% if not challenge_mode %}
+                <!-- Q&A Mode -->
                 <form method="post">
-                  <label class="form-label">Ask a question about the document</label>
-                  <input class="form-control mb-3" type="text" name="question" placeholder="Type your question" required>
+                  <div class="mb-3">
+                    <label class="form-label fw-semibold">Ask about the document</label>
+                    <input class="form-control" type="text" name="question" placeholder="Type your question..." required>
+                  </div>
                   <button class="btn btn-primary w-100" type="submit">Get Answer</button>
                 </form>
-              </div>
-              {% if answer %}
-                <div class="main-card p-4 answer-card mb-4">
-                  <div class="section-title">AI Answer</div>
-                  <div>{{ answer|safe }}</div>
-                </div>
-              {% endif %}
-            {% else %}
-              <div class="mb-3">
+
+                {% if answer %}
+                  <div class="card answer-section mt-3">
+                    <div class="card-body">
+                      <h6 class="card-title">AI Answer</h6>
+                      <div>{{ answer|safe }}</div>
+                    </div>
+                  </div>
+                {% endif %}
+
+              {% else %}
+                <!-- Challenge Mode -->
                 <form method="post">
-                  <button class="btn btn-primary w-100 mb-3" type="submit" name="get_challenges">Generate Challenge Questions</button>
+                  <button class="btn btn-success w-100 mb-3" type="submit" name="get_challenges">Generate Challenge Questions</button>
                 </form>
+
                 {% if challenge_questions %}
                   <form method="post">
                     {% for q, feedback in zip(challenge_questions, challenge_feedback) %}
-                      <div class="main-card p-3 mb-3 challenge-card">
-                        <div class="fw-bold mb-2">Q{{ loop.index }}: {{ q }}</div>
-                        <input class="form-control my-2" type="text" name="user_answer_{{ loop.index0 }}" placeholder="Your answer" required>
-                        <button class="btn btn-success" type="submit" name="submit_answer" value="{{ loop.index0 }}">Check Answer</button>
-                        {% if feedback %}
-                          <div class="mt-2 alert alert-info">{{ feedback|safe }}</div>
-                        {% endif %}
+                      <div class="card challenge-item">
+                        <div class="card-body">
+                          <h6 class="fw-bold">{{ q }}</h6>
+                          <div class="input-group mb-2">
+                            <input class="form-control" type="text" name="user_answer_{{ loop.index0 }}" placeholder="Your answer..." required>
+                            <button class="btn btn-success" type="submit" name="submit_answer" value="{{ loop.index0 }}">Check</button>
+                          </div>
+                          {% if feedback %}
+                            <div class="alert alert-info mt-2 mb-0">{{ feedback|safe }}</div>
+                          {% endif %}
+                        </div>
                       </div>
                     {% endfor %}
                   </form>
                 {% endif %}
-              </div>
-            {% endif %}
+              {% endif %}
+            </div>
           </div>
         {% endif %}
       </div>
+
+      <!-- Sidebar -->
+      <div class="col-lg-3">
+        <div class="sidebar">
+          <h6 class="fw-bold mb-3">How it Works</h6>
+          <ul>
+            <li>Upload PDF or TXT (max 10 pages)</li>
+            <li>Choose summary length</li>
+            <li>Get instant AI summary</li>
+            <li>Ask questions or try challenges</li>
+          </ul>
+          
+          <h6 class="fw-bold mb-3">Features</h6>
+          <ul>
+            <li>Contextual answers with references</li>
+            <li>Logic-based challenge questions</li>
+            <li>Modern, responsive design</li>
+            <li>Support for research & legal docs</li>
+          </ul>
+        </div>
+      </div>
     </div>
-    <div id="about" class="main-card p-4 mb-4">
-      <div class="section-title">About DocMind Ai</div>
-      <p>DocuMind AI is a next-generation assistant for deep document comprehension. It leverages advanced language models to summarize, answer questions, and generate logic-based challenges from research papers, legal files, and technical manuals. Built for students, professionals, and researchers who need fast, reliable insights from complex documents.</p>
+
+    <!-- About Section -->
+    <div id="about" class="card">
+      <div class="card-body">
+        <h5 class="card-title">About DocMind AI</h5>
+        <p>DocMind AI is a next-generation assistant for deep document comprehension. It leverages advanced language models to summarize, answer questions, and generate logic-based challenges from research papers, legal files, and technical manuals. Built for students, professionals, and researchers who need fast, reliable insights from complex documents.</p>
+      </div>
     </div>
-    <div id="contact" class="main-card p-4 mb-4">
-      <div class="section-title">Contact</div>
-      <p><strong>Name:</strong> Ansh Agnihotri</p>
-      <p><strong>Phone:</strong> 9354626027</p>
-      <p><strong>Email:</strong> <a href="mailto:agnihotriansh05@gmail.com">agnihotriansh05@gmail.com</a></p>
-      <p><strong>GitHub:</strong> <a href="https://github.com/agnihotri-anxh">github.com/agnihotri-anxh</a></p>
-    </div>
-    <div class="footer">
-      <div>DocMind Ai &copy; 2024 | Developed by Ansh Agnihotri | 9354626027 | <a href="mailto:agnihotriansh05@gmail.com">agnihotriansh05@gmail.com</a> | <a href="https://github.com/agnihotri-anxh">GitHub</a></div>
-      <div>For placement demo purposes</div>
+
+    <!-- Contact Section -->
+    <div id="contact" class="card">
+      <div class="card-body">
+        <h5 class="card-title">Contact</h5>
+        <div class="contact-info">
+          <p><strong>Developer:</strong> Ansh Agnihotri</p>
+          <p><strong>Phone:</strong> 9354626027</p>
+          <p><strong>Email:</strong> <a href="mailto:agnihotriansh05@gmail.com">agnihotriansh05@gmail.com</a></p>
+          <p><strong>GitHub:</strong> <a href="https://github.com/agnihotri-anxh" target="_blank">github.com/agnihotri-anxh</a></p>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p class="mb-1">DocMind AI &copy; 2024 | Developed by Ansh Agnihotri</p>
+      <p class="mb-0">
+        <a href="tel:9354626027">9354626027</a> | 
+        <a href="mailto:agnihotriansh05@gmail.com">Email</a> | 
+        <a href="https://github.com/agnihotri-anxh" target="_blank">GitHub</a>
+      </p>
+      <small class="text-muted">For placement demo purposes</small>
+    </div>
+  </footer>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-</html> 
+</html>

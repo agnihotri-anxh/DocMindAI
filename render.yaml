@@ -9,6 +9,8 @@ services:
     envVars:
       - key: GROQ_API_KEY
         sync: false
+      - key: PORT
+        value: 8000
 
   # Frontend Flask Service
   - type: web
@@ -21,4 +23,6 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: API_URL
-        value: https://documind-backend.onrender.com 
+        value: https://documind-backend.onrender.com
+      - key: PORT
+        value: 5000 
