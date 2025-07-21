@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.jinja_env.globals.update(zip=zip)
 app.secret_key = os.urandom(24)  # Use a secure, random secret key
-API_URL = os.environ.get("API_URL", "http://localhost:8000")
+API_URL = os.environ.get("API_URL", "/api") # Use relative path for Vercel
 
 # Log the API URL being used
 logger.info(f"Frontend configured to connect to backend at: {API_URL}")
