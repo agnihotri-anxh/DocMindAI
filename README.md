@@ -52,38 +52,6 @@ python app.py
 ```
 Frontend will run at `http://localhost:5000`.
 
-Open [http://localhost:5000](http://localhost:5000) in your browser.
 
-## Deployment (Not Yet Deployed)
-
-> **Note:** The app is not yet deployed. The following instructions are for future deployment, e.g., on Heroku.
-
-You can deploy the frontend and backend as **separate Heroku apps**:
-
-### Backend (FastAPI)
-1. In `backend/`, add a `Procfile`:
-   ```
-   web: uvicorn main:app --host=0.0.0.0 --port=${PORT:-5000}
-   ```
-2. Push to a new Heroku app:
-   ```bash
-   heroku create your-backend-app
-   heroku config:set GROQ_API_KEY=your_groq_api_key_here
-   git push heroku main
-   ```
-
-### Frontend (Flask)
-1. In `frontend/`, add a `Procfile`:
-   ```
-   web: gunicorn app:app
-   ```
-2. Set the backend URL:
-   ```bash
-   heroku create your-frontend-app
-   heroku config:set API_URL=https://your-backend-app.herokuapp.com
-   git push heroku main
-   ```
-
-## License
 
 This project is licensed under the Apache License 2.0. See the LICENSE file for details. 
