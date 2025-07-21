@@ -1,9 +1,9 @@
-Flask
+fastapi
+uvicorn
+python-dotenv
 langchain-community
 langchain-huggingface
 langchain-groq
 pypdf
-chromadb
-sentence-transformers
-python-dotenv
-gunicorn 
+faiss-cpu
+sentence-transformers 
