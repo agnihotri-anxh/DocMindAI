@@ -1,0 +1,9 @@
+Flask
+langchain-community
+langchain-huggingface
+langchain-groq
+pypdf
+chromadb
+sentence-transformers
+python-dotenv
+gunicorn 
