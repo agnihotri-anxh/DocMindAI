@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, flash, redirect, url_for
+from flask import Flask, render_template, request, flash, redirect, url_for, session
 import requests
 import os
 import logging
@@ -8,7 +8,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
+app.jinja_env.globals.update(zip=zip)
+app.secret_key = os.urandom(24)  # Use a secure, random secret key
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 # Log the API URL being used
@@ -17,14 +18,21 @@ logger.info(f"Frontend configured to connect to backend at: {API_URL}")
 # Project name for branding
 PROJECT_NAME = "DocMind Ai"
 
-# Simple in-memory session (for demo)
-SESSION = {"summary": None, "doc_uploaded": False, "challenge_questions": [], "challenge_feedback": []}
-
 @app.route("/", methods=["GET", "POST"])
 def index():
+    if 'summary' not in session:
+        session['summary'] = None
+        session['doc_uploaded'] = False
+        session['challenge_questions'] = []
+        session['challenge_feedback'] = []
+    
     answer = None
-    feedback = None
     challenge_mode = request.args.get("mode") == "challenge"
+
+    if request.method == "GET" and not challenge_mode:
+        # Reset session for a fresh start
+        session.clear()
+
     if request.method == "POST":
         if "file" in request.files and request.files["file"].filename != "":
             file = request.files["file"]
@@ -41,10 +49,10 @@ def index():
                 if resp.status_code == 200:
                     try:
                         data = resp.json()
-                        SESSION["summary"] = data.get("summary", "")
-                        SESSION["doc_uploaded"] = True
-                        SESSION["challenge_questions"] = []
-                        SESSION["challenge_feedback"] = []
+                        session["summary"] = data.get("summary", "")
+                        session["doc_uploaded"] = True
+                        session["challenge_questions"] = []
+                        session["challenge_feedback"] = []
                         flash(f"✅ {PROJECT_NAME}: Document processed successfully!", "success")
                     except ValueError:
                         logger.error(f"Invalid JSON response: {resp.text}")
@@ -86,8 +94,8 @@ def index():
                 resp = requests.post(f"{API_URL}/challenge")
                 if resp.status_code == 200:
                     try:
-                        SESSION["challenge_questions"] = resp.json().get("questions", [])
-                        SESSION["challenge_feedback"] = [None] * len(SESSION["challenge_questions"])
+                        session["challenge_questions"] = resp.json().get("questions", [])
+                        session["challenge_feedback"] = [None] * len(session["challenge_questions"])
                     except ValueError:
                         flash("❌ Invalid response from server.", "danger")
                 else:
@@ -97,33 +105,35 @@ def index():
                         flash(f"❌ Server error (Status: {resp.status_code})", "danger")
             except requests.exceptions.RequestException as e:
                 flash(f"❌ Connection error: {str(e)}", "danger")
-        elif "submit_answer" in request.form:
-            idx = int(request.form["submit_answer"])  # which question
-            user_answer = request.form.get(f"user_answer_{idx}", "")
-            question = SESSION["challenge_questions"][idx]
-            try:
-                resp = requests.post(f"{API_URL}/evaluate", data={"question": question, "answer": user_answer})
-                if resp.status_code == 200:
-                    try:
-                        feedback = resp.json().get("feedback", "No feedback returned.")
-                        SESSION["challenge_feedback"][idx] = feedback
-                    except ValueError:
-                        flash("❌ Invalid response from server.", "danger")
-                else:
-                    try:
-                        flash(resp.json().get("error", "❌ Failed to evaluate answer."), "danger")
-                    except ValueError:
-                        flash(f"❌ Server error (Status: {resp.status_code})", "danger")
-            except requests.exceptions.RequestException as e:
-                flash(f"❌ Connection error: {str(e)}", "danger")
+
+        elif "submit_all_answers" in request.form:
+            session["challenge_feedback"] = []
+            for i, question in enumerate(session.get("challenge_questions", [])):
+                user_answer = request.form.get(f"user_answer_{i}", "")
+                
+                try:
+                    resp = requests.post(
+                        f"{API_URL}/evaluate",
+                        data={"question": question, "answer": user_answer}
+                    )
+                    
+                    if resp.status_code == 200:
+                        feedback_data = resp.json()
+                        session["challenge_feedback"].append(feedback_data.get("feedback", "No feedback."))
+                    else:
+                        session["challenge_feedback"].append("Error from server.")
+                
+                except requests.exceptions.RequestException:
+                    session["challenge_feedback"].append("Connection error.")
+
     return render_template(
         "index.html",
-        summary=SESSION["summary"],
-        doc_uploaded=SESSION["doc_uploaded"],
+        summary=session.get("summary"),
+        doc_uploaded=session.get("doc_uploaded"),
         answer=answer,
         challenge_mode=challenge_mode,
-        challenge_questions=SESSION["challenge_questions"],
-        challenge_feedback=SESSION["challenge_feedback"]
+        challenge_questions=session.get("challenge_questions", []),
+        challenge_feedback=session.get("challenge_feedback", [])
     )
 
 @app.route("/challenge")

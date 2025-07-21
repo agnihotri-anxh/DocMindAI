@@ -235,27 +235,49 @@
 
               {% else %}
                 <!-- Challenge Mode -->
-                <form method="post">
-                  <button class="btn btn-success w-100 mb-3" type="submit" name="get_challenges">Generate Challenge Questions</button>
-                </form>
+                <p>Test your understanding of the document.</p>
 
-                {% if challenge_questions %}
-                  <form method="post">
-                    {% for q, feedback in zip(challenge_questions, challenge_feedback) %}
-                      <div class="card challenge-item">
-                        <div class="card-body">
-                          <h6 class="fw-bold">{{ q }}</h6>
-                          <div class="input-group mb-2">
-                            <input class="form-control" type="text" name="user_answer_{{ loop.index0 }}" placeholder="Your answer..." required>
-                            <button class="btn btn-success" type="submit" name="submit_answer" value="{{ loop.index0 }}">Check</button>
-                          </div>
-                          {% if feedback %}
-                            <div class="alert alert-info mt-2 mb-0">{{ feedback|safe }}</div>
-                          {% endif %}
+                {% if not challenge_questions %}
+                    <form method="POST" action="{{ url_for('index', mode='challenge') }}">
+                        <button class="btn btn-success w-100" type="submit" name="get_challenges" value="true">
+                            Generate Challenge Questions
+                        </button>
+                    </form>
+                {% else %}
+                    <form method="POST" action="{{ url_for('index', mode='challenge') }}">
+                        {% for q, feedback in zip(challenge_questions, challenge_feedback) %}
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <p class="card-text">{{ loop.index }}. {{ q }}</p>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" name="user_answer_{{ loop.index0 }}" placeholder="Your answer..." required
+                                               value="{{ request.form.get('user_answer_' + loop.index0|string, '') }}">
+                                    </div>
+                                    {% if feedback %}
+                                        <div class="mt-3 p-3 rounded 
+                                            {% if 'Correct' in feedback %}
+                                                bg-success-light text-success-dark
+                                            {% elif 'Incorrect' in feedback or 'Partially' in feedback %}
+                                                bg-warning-light text-warning-dark
+                                            {% else %}
+                                                bg-info-light
+                                            {% endif %}
+                                        ">
+                                            <strong>Feedback:</strong> {{ feedback }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+
+                        {% if challenge_questions %}
+                        <div class="mt-4">
+                            <button class="btn btn-primary w-100" type="submit" name="submit_all_answers" value="true">
+                                Check All Answers
+                            </button>
                         </div>
-                      </div>
-                    {% endfor %}
-                  </form>
+                        {% endif %}
+                    </form>
                 {% endif %}
               {% endif %}
             </div>
