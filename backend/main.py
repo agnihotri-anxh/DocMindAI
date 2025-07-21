@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from contextlib import asynccontextmanager
@@ -93,7 +93,7 @@ async def upload_document(file: UploadFile = File(...), summary_words: int = For
         if not all_docs:
             return JSONResponse(status_code=400, content={"error": "Could not extract text from the document."})
             
-        vectorstore = FAISS.from_documents(all_docs, embeddings)
+        vectorstore = Chroma.from_documents(all_docs, embeddings)
 
         # Generate summary from the first few pages
         summary_text = " ".join([doc.page_content for doc in all_docs[:3]])
