@@ -38,13 +38,34 @@ import shutil
 import tempfile
 import sys
 import os
+from contextlib import asynccontextmanager
 
 # Add the current directory to Python path to fix import issues
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ai_assistant import AIAssistant
 
-app = FastAPI()
+all_docs = None
+ai_assistant = AIAssistant()
+embeddings = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load the sentence transformer model at startup."""
+    global embeddings
+    logger.info("Loading sentence transformer model...")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/paraphrase-MiniLM-L3-v2", 
+        model_kwargs={"device": "cpu"}
+    )
+    logger.info("Model loaded successfully.")
+    yield
+    # Clean up the model and release the memory when the app shuts down
+    global embeddings
+    embeddings = None
+    logger.info("Model unloaded.")
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
