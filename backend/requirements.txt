@@ -6,4 +6,5 @@ langchain-huggingface
 langchain-groq
 pypdf
 faiss-cpu
-sentence-transformers 
+sentence-transformers
+distro 
