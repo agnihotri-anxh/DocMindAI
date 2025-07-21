@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 import os
+import psutil
 
 # Load .env file from the project root directory
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,11 +76,18 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
     logger.info("Received upload-document request")
     global all_docs, vectorstore, retriever
     
+    def log_memory(stage):
+        process = psutil.Process(os.getpid())
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        logger.info(f"[MEMORY] {stage}: {mem_mb:.2f} MB used")
+
     try:
-        logger.info(f"Processing file: {file.filename}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+        log_memory("Start upload-document")
+        logger.info(f"Processing file: {file.filename}, size: {getattr(file, 'size', 'unknown')}")
         MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
         contents = file.file.read()
         logger.info(f"File contents read, length: {len(contents)}")
+        log_memory("After file read")
         
         if len(contents) > MAX_FILE_SIZE:
             logger.warning(f"File too large: {len(contents)} bytes")
@@ -93,10 +101,12 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
             tmp.write(contents)
             tmp_path = tmp.name
             logger.info(f"Temporary file created: {tmp_path}")
+        log_memory("After temp file write")
         
         logger.info("Loading and splitting document...")
         docs = load_and_split(tmp_path, ext)
         logger.info(f"Document split into {len(docs)} chunks")
+        log_memory("After document split")
         
         all_docs = docs[:10]  # Only keep first 10 chunks/pages
         logger.info(f"Keeping first {len(all_docs)} chunks")
@@ -106,6 +116,7 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
         vectorstore = FAISS.from_documents(all_docs, embeddings)
         retriever = vectorstore.as_retriever()
         logger.info("Vector store and retriever created successfully")
+        log_memory("After embeddings and vectorstore")
         
         os.remove(tmp_path)
         logger.info("Temporary file removed")
@@ -115,21 +126,26 @@ def upload_document(file: UploadFile = File(...), summary_words: int = Form(150)
         # Concatenate the text for summary
         summary_text = "\n".join([doc.page_content for doc in summary_docs])
         logger.info(f"Summary text length: {len(summary_text)}")
+        log_memory("Before summary generation")
         
         logger.info("Generating summary...")
         summary = ai_assistant.generate_summary(summary_text, max_words=summary_words)
         logger.info(f"Summary generated, length: {len(summary)}")
+        log_memory("After summary generation")
         
         # Release memory after processing
         import gc
         del docs, summary_docs, summary_text, contents
         gc.collect()
-        logger.info("Memory cleaned up")
+        log_memory("After memory cleanup")
         
         response_data = {"message": "Document uploaded and processed.", "summary": summary}
         logger.info("Returning successful response")
         return response_data
         
+    except MemoryError:
+        logger.error("MemoryError: The server ran out of memory while processing the document.", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": "Server ran out of memory. Please try a smaller file or contact support."})
     except Exception as e:
         logger.error(f"Error in upload_document: {str(e)}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": f"Failed to process document: {str(e)}"})
