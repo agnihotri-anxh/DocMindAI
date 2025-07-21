@@ -54,7 +54,9 @@ Frontend will run at `http://localhost:5000`.
 
 Open [http://localhost:5000](http://localhost:5000) in your browser.
 
-## Heroku Deployment
+## Deployment (Not Yet Deployed)
+
+> **Note:** The app is not yet deployed. The following instructions are for future deployment, e.g., on Heroku.
 
 You can deploy the frontend and backend as **separate Heroku apps**:
 
