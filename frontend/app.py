@@ -34,7 +34,8 @@ def index():
                 resp = requests.post(
                     f"{API_URL}/upload-document",
                     files={"file": (file.filename, file.read())},
-                    data={"summary_words": summary_words}
+                    data={"summary_words": summary_words},
+                    timeout=60  # Increase timeout to 60 seconds
                 )
                 logger.info(f"Upload response status: {resp.status_code}")
                 if resp.status_code == 200:
@@ -55,6 +56,12 @@ def index():
                     except ValueError:
                         logger.error(f"Invalid error response: {resp.text}")
                         flash(f"❌ Server error (Status: {resp.status_code})", "danger")
+            except requests.exceptions.Timeout:
+                logger.error("Request timed out")
+                flash("❌ Request timed out. Please try again.", "danger")
+            except requests.exceptions.ConnectionError:
+                logger.error("Connection error")
+                flash("❌ Cannot connect to backend server. Please try again later.", "danger")
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request exception: {str(e)}")
                 flash(f"❌ Connection error: {str(e)}", "danger")
