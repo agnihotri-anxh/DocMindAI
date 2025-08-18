@@ -1,6 +1,11 @@
 # DocMind AI
 
 A full-stack document Q&A and challenge generator powered by FastAPI (backend), Flask (frontend), and Groq LLM API.
+<img width="1673" height="830" alt="image" src="https://github.com/user-attachments/assets/e4bf5cda-507f-4ae5-9c8d-d58d3039caf9" />
+
+
+
+<img width="1517" height="663" alt="image" src="https://github.com/user-attachments/assets/40401c50-c365-4d2f-9cdb-62099737cc5c" />
 
 ## Features
 - Upload PDF documents and get AI-generated summaries
