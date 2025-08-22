@@ -58,14 +58,14 @@ MODEL_NAME = "sentence-transformers/paraphrase-TinyBERT-L6-v2"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load the sentence transformer model at startup."""
-    global embeddings, vectorstore, all_docs
+    global embeddings, vectorstore, all_docs, USE_PINECONE
     
     # Initialize Pinecone if enabled
     if USE_PINECONE:
         try:
-            import pinecone
-            # For serverless, we don't need to initialize with environment
-            pinecone.init(api_key=PINECONE_API_KEY)
+            from pinecone import Pinecone
+            # Initialize with new Pinecone API
+            pc = Pinecone(api_key=PINECONE_API_KEY)
             logger.info("Pinecone initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Pinecone: {e}")
