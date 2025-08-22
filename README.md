@@ -1,6 +1,11 @@
 # DocMind AI
 
 A full-stack document Q&A and challenge generator powered by FastAPI (backend), Flask (frontend), and Groq LLM API.
+<img width="1673" height="830" alt="image" src="https://github.com/user-attachments/assets/e4bf5cda-507f-4ae5-9c8d-d58d3039caf9" />
+
+
+
+<img width="1517" height="663" alt="image" src="https://github.com/user-attachments/assets/40401c50-c365-4d2f-9cdb-62099737cc5c" />
 
 ## Features
 - Upload PDF documents and get AI-generated summaries
@@ -52,38 +57,6 @@ python app.py
 ```
 Frontend will run at `http://localhost:5000`.
 
-Open [http://localhost:5000](http://localhost:5000) in your browser.
 
-## Deployment (Not Yet Deployed)
-
-> **Note:** The app is not yet deployed. The following instructions are for future deployment, e.g., on Heroku.
-
-You can deploy the frontend and backend as **separate Heroku apps**:
-
-### Backend (FastAPI)
-1. In `backend/`, add a `Procfile`:
-   ```
-   web: uvicorn main:app --host=0.0.0.0 --port=${PORT:-5000}
-   ```
-2. Push to a new Heroku app:
-   ```bash
-   heroku create your-backend-app
-   heroku config:set GROQ_API_KEY=your_groq_api_key_here
-   git push heroku main
-   ```
-
-### Frontend (Flask)
-1. In `frontend/`, add a `Procfile`:
-   ```
-   web: gunicorn app:app
-   ```
-2. Set the backend URL:
-   ```bash
-   heroku create your-frontend-app
-   heroku config:set API_URL=https://your-backend-app.herokuapp.com
-   git push heroku main
-   ```
-
-## License
 
 This project is licensed under the Apache License 2.0. See the LICENSE file for details. 
