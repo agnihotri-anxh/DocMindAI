@@ -5,6 +5,8 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from contextlib import asynccontextmanager
@@ -33,6 +35,15 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     logger.warning("GROQ_API_KEY not found. Please set it as an environment variable.")
 
+# Vector store configuration
+USE_PINECONE = os.getenv("USE_PINECONE", "false").lower() in ("1", "true", "yes")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "docmind-index")
+PINECONE_HOST = os.getenv("PINECONE_HOST")  # optional: serverless host URL
+
+# OpenAI embeddings for Pinecone path
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 # --- Global Variables & In-memory Storage ---
 embeddings = None
 vectorstore = None
@@ -45,12 +56,19 @@ MODEL_NAME = "sentence-transformers/paraphrase-TinyBERT-L6-v2"
 async def lifespan(app: FastAPI):
     """Load the sentence transformer model at startup."""
     global embeddings, vectorstore, all_docs
-    logger.info(f"Loading sentence transformer model: {MODEL_NAME}...")
-    embeddings = HuggingFaceEmbeddings(
-        model_name=MODEL_NAME,
-        model_kwargs={"device": "cpu"}
-    )
-    logger.info("Model loaded successfully.")
+    if USE_PINECONE:
+        logger.info("USE_PINECONE enabled. Skipping local HF embeddings and using OpenAI embeddings.")
+        if not OPENAI_API_KEY:
+            logger.warning("OPENAI_API_KEY not set. Pinecone path requires OpenAI embeddings.")
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        logger.info("OpenAIEmbeddings initialized.")
+    else:
+        logger.info(f"Loading sentence transformer model: {MODEL_NAME}...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name=MODEL_NAME,
+            model_kwargs={"device": "cpu"}
+        )
+        logger.info("HF embeddings model loaded successfully.")
     yield
     # Clean up on shutdown
     vectorstore = None
@@ -93,7 +111,29 @@ async def upload_document(file: UploadFile = File(...), summary_words: int = For
         if not all_docs:
             return JSONResponse(status_code=400, content={"error": "Could not extract text from the document."})
             
-        vectorstore = FAISS.from_documents(all_docs, embeddings)
+        if USE_PINECONE:
+            # Persist to Pinecone index (assumes index already exists)
+            logger.info(f"Upserting {len(all_docs)} chunks to Pinecone index '{PINECONE_INDEX}'...")
+            try:
+                if PINECONE_HOST:
+                    vectorstore = PineconeVectorStore.from_documents(
+                        documents=all_docs,
+                        embedding=embeddings,
+                        index_name=PINECONE_INDEX,
+                        host=PINECONE_HOST,
+                    )
+                else:
+                    vectorstore = PineconeVectorStore.from_documents(
+                        documents=all_docs,
+                        embedding=embeddings,
+                        index_name=PINECONE_INDEX,
+                    )
+                logger.info("Pinecone upsert complete.")
+            except Exception as e:
+                logger.error(f"Pinecone upsert failed: {e}", exc_info=True)
+                return JSONResponse(status_code=500, content={"error": "Vector store upsert failed."})
+        else:
+            vectorstore = FAISS.from_documents(all_docs, embeddings)
 
         # Generate summary from the first few pages
         summary_text = " ".join([doc.page_content for doc in all_docs[:3]])
@@ -112,12 +152,33 @@ async def upload_document(file: UploadFile = File(...), summary_words: int = For
 
 @app.post("/ask")
 async def ask_question(query: str = Form(...)):
-    if not vectorstore:
+    if not vectorstore and not USE_PINECONE:
         return JSONResponse(status_code=400, content={"error": "No document has been uploaded yet."})
     
     try:
         llm = get_llm(model="llama3-70b-8192")
-        qa_chain = RetrievalQA.from_chain_type(llm, retriever=vectorstore.as_retriever())
+        if USE_PINECONE:
+            # Reconnect to Pinecone-backed vector store on-demand
+            try:
+                if PINECONE_HOST:
+                    pinecone_vs = PineconeVectorStore(
+                        index_name=PINECONE_INDEX,
+                        embedding=embeddings,
+                        host=PINECONE_HOST,
+                    )
+                else:
+                    pinecone_vs = PineconeVectorStore(
+                        index_name=PINECONE_INDEX,
+                        embedding=embeddings,
+                    )
+                retriever = pinecone_vs.as_retriever()
+            except Exception as e:
+                logger.error(f"Failed to connect to Pinecone index: {e}", exc_info=True)
+                return JSONResponse(status_code=500, content={"error": "Vector store unavailable."})
+        else:
+            retriever = vectorstore.as_retriever()
+
+        qa_chain = RetrievalQA.from_chain_type(llm, retriever=retriever)
         answer = qa_chain.run(query)
         return {"answer": answer}
     except Exception as e:

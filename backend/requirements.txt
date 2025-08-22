@@ -8,3 +8,7 @@ pypdf
 faiss-cpu
 sentence-transformers 
 python-multipart
+pinecone-client
+langchain-pinecone
+openai
+langchain-openai
