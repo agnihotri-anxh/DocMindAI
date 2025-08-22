@@ -6,7 +6,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.embeddings import HuggingFaceInferenceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
@@ -70,11 +69,25 @@ async def lifespan(app: FastAPI):
         elif EMBEDDING_PROVIDER in ("hf", "hf_inference", "huggingface"):
             if not HF_API_TOKEN:
                 logger.warning("HF_API_TOKEN not set. HF Inference embeddings will fail.")
-            embeddings = HuggingFaceInferenceEmbeddings(
-                api_key=HF_API_TOKEN,
-                model_name=HF_EMBEDDING_MODEL,
-            )
-            logger.info("HuggingFaceInferenceEmbeddings initialized with model: %s", HF_EMBEDDING_MODEL)
+            try:
+                # Import lazily to avoid hard dependency if not used
+                from langchain_community.embeddings import (
+                    HuggingFaceInferenceEmbeddings as _HFInferenceEmb,
+                )
+                embeddings = _HFInferenceEmb(
+                    api_key=HF_API_TOKEN,
+                    model_name=HF_EMBEDDING_MODEL,
+                )
+                logger.info(
+                    "HuggingFaceInferenceEmbeddings initialized with model: %s",
+                    HF_EMBEDDING_MODEL,
+                )
+            except Exception as imp_err:
+                logger.error(
+                    "Failed to initialize HF Inference embeddings: %s. Falling back to OpenAI",
+                    imp_err,
+                )
+                embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
         else:
             logger.warning("Unknown EMBEDDING_PROVIDER '%s'. Falling back to OpenAI.", EMBEDDING_PROVIDER)
             embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
