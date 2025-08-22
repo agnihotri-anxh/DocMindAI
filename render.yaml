@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: docmind-backend
+    env: docker
+    rootDir: backend
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+
+  - type: web
+    name: docmind-frontend
+    env: docker
+    rootDir: frontend
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      # Set API_URL to the backend's internal URL on Render
+      - key: API_URL
+        fromService:
+          type: web
+          name: docmind-backend
+          envVarKey: RENDER_EXTERNAL_URL
+
+
