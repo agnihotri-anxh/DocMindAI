@@ -42,7 +42,7 @@ PINECONE_INDEX = os.getenv("PINECONE_INDEX", "docmind-index")
 PINECONE_HOST = os.getenv("PINECONE_HOST")  # optional: serverless host URL
 
 # Embedding providers
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "hf_inference").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 HF_EMBEDDING_MODEL = os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
@@ -59,45 +59,38 @@ MODEL_NAME = "sentence-transformers/paraphrase-TinyBERT-L6-v2"
 async def lifespan(app: FastAPI):
     """Load the sentence transformer model at startup."""
     global embeddings, vectorstore, all_docs
+    
+    # Initialize Pinecone if enabled
     if USE_PINECONE:
-        logger.info("USE_PINECONE enabled. Initializing hosted embeddings provider: %s", EMBEDDING_PROVIDER)
-        if EMBEDDING_PROVIDER == "openai":
-            if not OPENAI_API_KEY:
-                logger.warning("OPENAI_API_KEY not set. OpenAI embeddings will fail.")
-            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-            logger.info("OpenAIEmbeddings initialized.")
-        elif EMBEDDING_PROVIDER in ("hf", "hf_inference", "huggingface"):
-            if not HF_API_TOKEN:
-                logger.warning("HF_API_TOKEN not set. HF Inference embeddings will fail.")
-            try:
-                # Import lazily to avoid hard dependency if not used
-                from langchain_community.embeddings import (
-                    HuggingFaceInferenceEmbeddings as _HFInferenceEmb,
-                )
-                embeddings = _HFInferenceEmb(
-                    api_key=HF_API_TOKEN,
-                    model_name=HF_EMBEDDING_MODEL,
-                )
-                logger.info(
-                    "HuggingFaceInferenceEmbeddings initialized with model: %s",
-                    HF_EMBEDDING_MODEL,
-                )
-            except Exception as imp_err:
-                logger.error(
-                    "Failed to initialize HF Inference embeddings: %s. Falling back to OpenAI",
-                    imp_err,
-                )
-                embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        else:
-            logger.warning("Unknown EMBEDDING_PROVIDER '%s'. Falling back to OpenAI.", EMBEDDING_PROVIDER)
-            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        try:
+            import pinecone
+            # For serverless, we don't need to initialize with environment
+            pinecone.init(api_key=PINECONE_API_KEY)
+            logger.info("Pinecone initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Pinecone: {e}")
+            USE_PINECONE = False
+    
+    logger.info("Initializing embeddings provider: %s", EMBEDDING_PROVIDER)
+    if EMBEDDING_PROVIDER == "openai":
+        if not OPENAI_API_KEY:
+            logger.warning("OPENAI_API_KEY not set. OpenAI embeddings will fail.")
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        logger.info("OpenAIEmbeddings initialized.")
+    elif EMBEDDING_PROVIDER in ("hf", "hf_inference", "huggingface"):
+        logger.info("Using HuggingFace embeddings with model: %s", HF_EMBEDDING_MODEL)
+        embeddings = HuggingFaceEmbeddings(
+            model_name=HF_EMBEDDING_MODEL,
+            model_kwargs={"device": "cpu"}
+        )
+        logger.info("HuggingFaceEmbeddings initialized successfully")
     else:
-        logger.info(f"Loading sentence transformer model: {MODEL_NAME}...")
+        logger.warning("Unknown EMBEDDING_PROVIDER '%s'. Falling back to default HF embeddings.", EMBEDDING_PROVIDER)
         embeddings = HuggingFaceEmbeddings(
             model_name=MODEL_NAME,
             model_kwargs={"device": "cpu"}
         )
-        logger.info("HF embeddings model loaded successfully.")
+        logger.info("Default HF embeddings model loaded successfully.")
     yield
     # Clean up on shutdown
     vectorstore = None
