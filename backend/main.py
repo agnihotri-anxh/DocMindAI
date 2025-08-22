@@ -6,6 +6,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceInferenceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
@@ -41,8 +42,11 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "docmind-index")
 PINECONE_HOST = os.getenv("PINECONE_HOST")  # optional: serverless host URL
 
-# OpenAI embeddings for Pinecone path
+# Embedding providers
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+HF_EMBEDDING_MODEL = os.getenv("HF_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # --- Global Variables & In-memory Storage ---
 embeddings = None
@@ -57,11 +61,23 @@ async def lifespan(app: FastAPI):
     """Load the sentence transformer model at startup."""
     global embeddings, vectorstore, all_docs
     if USE_PINECONE:
-        logger.info("USE_PINECONE enabled. Skipping local HF embeddings and using OpenAI embeddings.")
-        if not OPENAI_API_KEY:
-            logger.warning("OPENAI_API_KEY not set. Pinecone path requires OpenAI embeddings.")
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        logger.info("OpenAIEmbeddings initialized.")
+        logger.info("USE_PINECONE enabled. Initializing hosted embeddings provider: %s", EMBEDDING_PROVIDER)
+        if EMBEDDING_PROVIDER == "openai":
+            if not OPENAI_API_KEY:
+                logger.warning("OPENAI_API_KEY not set. OpenAI embeddings will fail.")
+            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+            logger.info("OpenAIEmbeddings initialized.")
+        elif EMBEDDING_PROVIDER in ("hf", "hf_inference", "huggingface"):
+            if not HF_API_TOKEN:
+                logger.warning("HF_API_TOKEN not set. HF Inference embeddings will fail.")
+            embeddings = HuggingFaceInferenceEmbeddings(
+                api_key=HF_API_TOKEN,
+                model_name=HF_EMBEDDING_MODEL,
+            )
+            logger.info("HuggingFaceInferenceEmbeddings initialized with model: %s", HF_EMBEDDING_MODEL)
+        else:
+            logger.warning("Unknown EMBEDDING_PROVIDER '%s'. Falling back to OpenAI.", EMBEDDING_PROVIDER)
+            embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
     else:
         logger.info(f"Loading sentence transformer model: {MODEL_NAME}...")
         embeddings = HuggingFaceEmbeddings(
