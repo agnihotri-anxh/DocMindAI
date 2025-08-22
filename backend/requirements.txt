@@ -7,3 +7,4 @@ langchain-groq
 pypdf
 faiss-cpu
 sentence-transformers 
+python-multipart
